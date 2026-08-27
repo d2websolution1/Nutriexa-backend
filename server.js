@@ -63,6 +63,9 @@ app.listen(PORT, async () => {
 
       ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 
+      ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS images TEXT;
+
       ALTER TABLE orders 
       ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'Pending',
       ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(255),
