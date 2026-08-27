@@ -36,7 +36,7 @@ router.post("/", verifyAdmin, upload.array("images", 5), async (req, res) => {
 
   // Support multi-image upload; fall back gracefully
   const uploadedFiles = req.files || [];
-  const imagePaths = uploadedFiles.map(f => `/uploads/products/${f.filename}`);
+  const imagePaths = uploadedFiles.map(f => f.path); // Cloudinary full URL
   const primaryImage = imagePaths[0] || null;
   const imagesJson = JSON.stringify(imagePaths);
 
@@ -76,7 +76,7 @@ router.put("/:id", verifyAdmin, upload.array("images", 5), async (req, res) => {
 
     // Add newly uploaded images
     const uploadedFiles = req.files || [];
-    const newPaths = uploadedFiles.map(f => `/uploads/products/${f.filename}`);
+    const newPaths = uploadedFiles.map(f => f.path); // Cloudinary full URL
     const allImages = [...keptImages, ...newPaths];
 
     const primaryImage = allImages[0] || existingRows[0].image || null;
