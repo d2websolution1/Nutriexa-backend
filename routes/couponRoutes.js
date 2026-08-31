@@ -1,11 +1,11 @@
 import express from "express";
 import db from "../config/db.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// GET all coupons (admin) — optional ?search=
-router.get("/", verifyAdmin, async (req, res) => {
+// GET all coupons (admin) — requires deals.view
+router.get("/", verifyAdmin, requirePermission("deals.view"), async (req, res) => {
   const { search } = req.query;
   try {
     let query = "SELECT * FROM coupons WHERE 1=1";
@@ -22,8 +22,8 @@ router.get("/", verifyAdmin, async (req, res) => {
   }
 });
 
-// CREATE coupon (admin)
-router.post("/", verifyAdmin, async (req, res) => {
+// CREATE coupon (admin) — requires deals.manage
+router.post("/", verifyAdmin, requirePermission("deals.manage"), async (req, res) => {
   const { code, type, value, minOrder, usageLimit, expiryDate } = req.body;
   if (!code || !type || !value || !expiryDate) {
     return res.status(400).json({ message: "Missing required fields." });
@@ -44,8 +44,8 @@ router.post("/", verifyAdmin, async (req, res) => {
   }
 });
 
-// UPDATE coupon (admin)
-router.put("/:id", verifyAdmin, async (req, res) => {
+// UPDATE coupon (admin) — requires deals.manage
+router.put("/:id", verifyAdmin, requirePermission("deals.manage"), async (req, res) => {
   const { code, type, value, minOrder, usageLimit, expiryDate } = req.body;
   try {
     const status = new Date(expiryDate) < new Date() ? "Expired" : "Active";
@@ -61,8 +61,8 @@ router.put("/:id", verifyAdmin, async (req, res) => {
   }
 });
 
-// DELETE coupon (admin)
-router.delete("/:id", verifyAdmin, async (req, res) => {
+// DELETE coupon (admin) — requires deals.manage
+router.delete("/:id", verifyAdmin, requirePermission("deals.manage"), async (req, res) => {
   try {
     const result = await db.query("DELETE FROM coupons WHERE id = $1", [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ message: "Coupon not found." });
@@ -72,8 +72,8 @@ router.delete("/:id", verifyAdmin, async (req, res) => {
   }
 });
 
-// GET weekly deals (admin)
-router.get("/weekly-deals/list", verifyAdmin, async (req, res) => {
+// GET weekly deals (admin) — requires deals.view
+router.get("/weekly-deals/list", verifyAdmin, requirePermission("deals.view"), async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT wd.id, wd.discount_percent, wd.ends_at, p.name, p.id AS product_id
@@ -87,8 +87,8 @@ router.get("/weekly-deals/list", verifyAdmin, async (req, res) => {
   }
 });
 
-// ADD product to weekly deals (admin)
-router.post("/weekly-deals", verifyAdmin, async (req, res) => {
+// ADD product to weekly deals (admin) — requires deals.manage
+router.post("/weekly-deals", verifyAdmin, requirePermission("deals.manage"), async (req, res) => {
   const { product_id, discount_percent, ends_at } = req.body;
   if (!product_id || !discount_percent || !ends_at) {
     return res.status(400).json({ message: "Missing required fields." });
@@ -104,8 +104,8 @@ router.post("/weekly-deals", verifyAdmin, async (req, res) => {
   }
 });
 
-// DELETE weekly deal (admin)
-router.delete("/weekly-deals/:id", verifyAdmin, async (req, res) => {
+// DELETE weekly deal (admin) — requires deals.manage
+router.delete("/weekly-deals/:id", verifyAdmin, requirePermission("deals.manage"), async (req, res) => {
   try {
     const result = await db.query("DELETE FROM weekly_deals WHERE id = $1", [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ message: "Deal not found." });
@@ -138,4 +138,5 @@ router.get("/weekly-deals/public", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch deals.", error: err.message });
   }
 });
-export default router;
+
+export default router;

@@ -1,6 +1,6 @@
 import express from "express";
 import db from "../config/db.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -69,8 +69,8 @@ router.post("/verify", async (req, res) => {
   }
 });
 
-// ADMIN — generate codes for a product
-router.post("/generate", verifyAdmin, async (req, res) => {
+// ADMIN — generate codes for a product (requires authenticator.generate)
+router.post("/generate", verifyAdmin, requirePermission("authenticator.generate"), async (req, res) => {
   const { product_id, quantity, batch_number, manufactured_date } = req.body;
   if (!product_id || !quantity) {
     return res.status(400).json({ message: "product_id and quantity are required." });
@@ -102,8 +102,8 @@ router.post("/generate", verifyAdmin, async (req, res) => {
   }
 });
 
-// ADMIN — list codes for a product
-router.get("/codes/:productId", verifyAdmin, async (req, res) => {
+// ADMIN — list codes for a product (requires authenticator.view)
+router.get("/codes/:productId", verifyAdmin, requirePermission("authenticator.view"), async (req, res) => {
   try {
     const [rows] = await db.query(
       "SELECT * FROM authenticity_codes WHERE product_id = ? ORDER BY created_at DESC",
@@ -115,4 +115,4 @@ router.get("/codes/:productId", verifyAdmin, async (req, res) => {
   }
 });
 
-export default router;
+export default router;

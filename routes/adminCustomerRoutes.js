@@ -1,13 +1,13 @@
 import express from "express";
 import db from "../config/db.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/", verifyAdmin, async (req, res) => {
+router.get("/", verifyAdmin, requirePermission("customers.view"), async (req, res) => {
   try {
     const { rows } = await db.query(
-      "SELECT id, name, email, is_verified, created_at FROM users ORDER BY created_at DESC"
+      "SELECT id, name, email, phone, is_verified, created_at FROM users ORDER BY created_at DESC"
     );
     res.json(rows);
   } catch (err) {
@@ -15,4 +15,4 @@ router.get("/", verifyAdmin, async (req, res) => {
   }
 });
 
-export default router;
+export default router;

@@ -1,7 +1,7 @@
 import express from "express";
 import db from "../config/db.js";
 import upload from "../middleware/upload.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -26,8 +26,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// CREATE product (admin only)
-router.post("/", verifyAdmin, upload.array("images", 5), async (req, res) => {
+// CREATE product (admin only — requires products.create)
+router.post("/", verifyAdmin, requirePermission("products.create"), upload.array("images", 5), async (req, res) => {
   const { name, variant, category, price, mrp, stock, status, description } = req.body;
 
   if (!name || !category || !price) {
@@ -53,8 +53,8 @@ router.post("/", verifyAdmin, upload.array("images", 5), async (req, res) => {
   }
 });
 
-// UPDATE product (admin only)
-router.put("/:id", verifyAdmin, upload.array("images", 5), async (req, res) => {
+// UPDATE product (admin only — requires products.edit)
+router.put("/:id", verifyAdmin, requirePermission("products.edit"), upload.array("images", 5), async (req, res) => {
   const { name, variant, category, price, mrp, stock, status, description } = req.body;
   // existingImages: JSON string of images the admin wants to keep (sent from frontend)
   let { existingImages } = req.body;
@@ -93,8 +93,8 @@ router.put("/:id", verifyAdmin, upload.array("images", 5), async (req, res) => {
   }
 });
 
-// DELETE product (admin only)
-router.delete("/:id", verifyAdmin, async (req, res) => {
+// DELETE product (admin only — requires products.delete)
+router.delete("/:id", verifyAdmin, requirePermission("products.delete"), async (req, res) => {
   try {
     const [, result] = await db.query("DELETE FROM products WHERE id = $1", [req.params.id]);
     if (result.rowCount === 0) {
@@ -105,5 +105,6 @@ router.delete("/:id", verifyAdmin, async (req, res) => {
     res.status(500).json({ message: "Failed to delete product.", error: err.message });
   }
 });
+
 
 export default router;

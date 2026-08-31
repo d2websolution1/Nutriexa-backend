@@ -1,12 +1,12 @@
 import express from "express";
 import db from "../config/db.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 import { createOrderInDB } from "../services/orderService.js";
 
 const router = express.Router();
 
-// GET all orders (admin only) — supports optional ?status= filter and ?search=
-router.get("/", verifyAdmin, async (req, res) => {
+// GET all orders (admin only — requires orders.view) — supports optional ?status= filter and ?search=
+router.get("/", verifyAdmin, requirePermission("orders.view"), async (req, res) => {
   const { status, search } = req.query;
   try {
     let query = `
@@ -40,8 +40,8 @@ router.get("/", verifyAdmin, async (req, res) => {
   }
 });
 
-// GET recent orders (for dashboard widget)
-router.get("/recent", verifyAdmin, async (req, res) => {
+// GET recent orders (for dashboard widget — requires dashboard.view or orders.view)
+router.get("/recent", verifyAdmin, requirePermission(["dashboard.view", "orders.view"]), async (req, res) => {
   try {
     const { rows } = await db.query(
       "SELECT * FROM orders ORDER BY created_at DESC LIMIT 5"
@@ -79,8 +79,8 @@ router.get("/track/:orderNumber", async (req, res) => {
   }
 });
 
-// GET single order with its items (admin only)
-router.get("/:id", verifyAdmin, async (req, res) => {
+// GET single order with its items (admin only — requires orders.view)
+router.get("/:id", verifyAdmin, requirePermission("orders.view"), async (req, res) => {
   try {
     const { rows: orderRows } = await db.query("SELECT * FROM orders WHERE id = $1", [
       req.params.id,
@@ -154,8 +154,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-// UPDATE order status (admin only)
-router.put("/:id/status", verifyAdmin, async (req, res) => {
+// UPDATE order status (admin only — requires orders.edit)
+router.put("/:id/status", verifyAdmin, requirePermission("orders.edit"), async (req, res) => {
   const { status } = req.body;
   const validStatuses = ["Pending", "Shipped", "Delivered", "Cancelled"];
 
@@ -177,8 +177,8 @@ router.put("/:id/status", verifyAdmin, async (req, res) => {
   }
 });
 
-// DELETE order (admin only)
-router.delete("/:id", verifyAdmin, async (req, res) => {
+// DELETE order (admin only — requires orders.delete)
+router.delete("/:id", verifyAdmin, requirePermission("orders.delete"), async (req, res) => {
   try {
     const result = await db.query("DELETE FROM orders WHERE id = $1", [req.params.id]);
     if (result.rowCount === 0) {
@@ -190,4 +190,4 @@ router.delete("/:id", verifyAdmin, async (req, res) => {
   }
 });
 
-export default router;
+export default router;

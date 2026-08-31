@@ -12,6 +12,7 @@ import couponRoutes from "./routes/couponRoutes.js";
 import authenticatorRoutes from "./routes/authenticatorRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
+import staffRoutes from "./routes/staffRoutes.js";
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 
@@ -30,6 +31,7 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/admin", authRoutes);
+app.use("/api/admin/staff", staffRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin/customers", adminCustomerRoutes);
@@ -55,6 +57,32 @@ app.listen(PORT, async () => {
 
     // Auto-migrate missing columns and tables if needed
     await db.query(`
+      CREATE TABLE IF NOT EXISTS admins (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(100) DEFAULT 'Staff',
+        permissions TEXT DEFAULT '[]',
+        is_active BOOLEAN DEFAULT TRUE,
+        phone VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      ALTER TABLE admins 
+      ADD COLUMN IF NOT EXISTS role VARCHAR(100) DEFAULT 'Staff',
+      ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+      -- Ensure existing super admin accounts have proper role and wildcard permissions
+      UPDATE admins 
+      SET role = 'Super Admin', permissions = '["*"]' 
+      WHERE (role IS NULL OR role = 'Super Admin' OR role = 'admin' OR email = 'admin@nutriexa.com') 
+        AND (permissions IS NULL OR permissions = '[]' OR permissions = '' OR permissions = 'null');
+
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
       ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE,
@@ -95,4 +123,4 @@ app.listen(PORT, async () => {
     console.error("❌ Supabase PostgreSQL connection/migration failed:");
     console.error("Message:", error.message);
   }
-});
+});

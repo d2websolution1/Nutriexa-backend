@@ -1,11 +1,11 @@
 import express from "express";
 import db from "../config/db.js";
-import { verifyAdmin } from "../middleware/authMiddleware.js";
+import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// GET /api/admin/dashboard — combined stats for the dashboard page
-router.get("/", verifyAdmin, async (req, res) => {
+// GET /api/admin/dashboard — combined stats for the dashboard page (requires dashboard.view)
+router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, res) => {
   try {
     // --- Totals (all-time) ---
     const { rows: [revenueRow] } = await db.query(
@@ -90,4 +90,4 @@ router.get("/", verifyAdmin, async (req, res) => {
   }
 });
 
-export default router;
+export default router;
