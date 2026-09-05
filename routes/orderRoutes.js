@@ -5,9 +5,9 @@ import { createOrderInDB } from "../services/orderService.js";
 
 const router = express.Router();
 
-// GET all orders (admin only — requires orders.view) — supports optional ?status= filter and ?search=
+// GET all orders (admin only — requires orders.view) — supports optional ?status=, ?search=, ?startDate=, ?endDate=
 router.get("/", verifyAdmin, requirePermission("orders.view"), async (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, startDate, endDate } = req.query;
   try {
     let query = `
       SELECT
@@ -21,6 +21,16 @@ router.get("/", verifyAdmin, requirePermission("orders.view"), async (req, res) 
     if (status && status !== "All") {
       params.push(status);
       query += ` AND o.status = $${params.length}`;
+    }
+
+    if (startDate) {
+      params.push(startDate);
+      query += ` AND o.created_at >= $${params.length}::timestamp`;
+    }
+
+    if (endDate) {
+      params.push(`${endDate} 23:59:59.999`);
+      query += ` AND o.created_at <= $${params.length}::timestamp`;
     }
 
     if (search) {

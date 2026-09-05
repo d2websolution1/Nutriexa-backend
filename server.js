@@ -13,6 +13,7 @@ import authenticatorRoutes from "./routes/authenticatorRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import staffRoutes from "./routes/staffRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 
@@ -32,6 +33,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/admin", authRoutes);
 app.use("/api/admin/staff", staffRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin/customers", adminCustomerRoutes);
@@ -92,7 +94,33 @@ app.listen(PORT, async () => {
       ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 
       ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS images TEXT;
+      ADD COLUMN IF NOT EXISTS images TEXT,
+      ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
+
+      UPDATE products 
+      SET sku = 'NX-' || UPPER(SUBSTRING(COALESCE(category, 'PRD') FROM 1 FOR 4)) || '-' || LPAD(id::text, 4, '0') 
+      WHERE sku IS NULL OR sku = '';
+
+      CREATE TABLE IF NOT EXISTS categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        image TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Seed default categories if none exist
+      INSERT INTO categories (name, slug, description, is_active)
+      VALUES
+        ('Whey Proteins', 'whey-proteins', 'Premium whey isolate and concentrate blends for lean muscle growth.', TRUE),
+        ('Mass Gainers', 'mass-gainers', 'High calorie mass gain formulas rich in protein and complex carbs.', TRUE),
+        ('Pre-Workouts', 'pre-workouts', 'Explosive energy and pump formulas for intense workout sessions.', TRUE),
+        ('Amino Acids & BCAA', 'amino-acids', 'Fast absorbing BCAAs and EAAs for speedy muscle recovery.', TRUE),
+        ('Health & Wellness', 'health-wellness', 'Essential vitamins, fish oil, and immunity boosters.', TRUE),
+        ('Accessories', 'accessories', 'Shakers, gym straps, and fitness merchandise.', TRUE)
+      ON CONFLICT (slug) DO NOTHING;
 
       ALTER TABLE orders 
       ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'Pending',

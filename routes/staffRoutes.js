@@ -76,16 +76,17 @@ export const SYSTEM_PERMISSIONS = [
   },
 ];
 
-// Predefined role presets
+// Predefined role presets - strictly Manager and Sales for staff creation
 export const PRESET_ROLES = [
   {
     name: "Super Admin",
     description: "Full unrestricted access to every feature and administrative settings.",
     permissions: ["*"],
+    selectableForStaff: false,
   },
   {
-    name: "Store Manager",
-    description: "Full control over products, orders, customers, deals, and authenticator.",
+    name: "Manager",
+    description: "Full store management: products, inventory, categories, orders, customers, deals.",
     permissions: [
       "dashboard.view",
       "products.view",
@@ -101,43 +102,20 @@ export const PRESET_ROLES = [
       "authenticator.generate",
       "settings.view",
     ],
+    selectableForStaff: true,
   },
   {
-    name: "Inventory Manager",
-    description: "Responsible for managing products, catalog stock, and packaging authentication codes.",
-    permissions: [
-      "dashboard.view",
-      "products.view",
-      "products.create",
-      "products.edit",
-      "products.delete",
-      "authenticator.view",
-      "authenticator.generate",
-    ],
-  },
-  {
-    name: "Order Processor",
-    description: "Handles incoming customer orders, fulfillment statuses, and customer inquiries.",
+    name: "Sales",
+    description: "Sales & customer operations: view and update orders, customer support, deals, and view products.",
     permissions: [
       "dashboard.view",
       "orders.view",
       "orders.edit",
       "customers.view",
+      "products.view",
+      "deals.view",
     ],
-  },
-  {
-    name: "Customer Support",
-    description: "Read-only access to customer orders and user profiles to assist buyers.",
-    permissions: [
-      "dashboard.view",
-      "orders.view",
-      "customers.view",
-    ],
-  },
-  {
-    name: "Custom Staff",
-    description: "Custom role with tailored permissions assigned by the administrator.",
-    permissions: [],
+    selectableForStaff: true,
   },
 ];
 
@@ -207,7 +185,14 @@ router.post("/", verifyAdmin, requirePermission("staff.create"), async (req, res
     return res.status(400).json({ message: "Password must be at least 6 characters long." });
   }
 
-  const assignedRole = role || "Custom Staff";
+  const assignedRole = role || "Manager";
+
+  // Allowed staff creation roles are strictly Manager and Sales (Super Admin allowed only if created by Super Admin)
+  const allowedRoles = ["Manager", "Sales", "Store Manager"];
+  if (req.admin.role === "Super Admin") allowedRoles.push("Super Admin");
+  if (!allowedRoles.includes(assignedRole)) {
+    return res.status(400).json({ message: "Staff role must be either 'Manager' or 'Sales'." });
+  }
 
   // Prevent non-Super-Admin from creating a Super Admin
   if (assignedRole === "Super Admin" && req.admin.role !== "Super Admin") {
