@@ -25,7 +25,8 @@
     "mysql2": "^3.23.3",
     "nodemailer": "^9.0.5",
     "pg": "^8.23.0",
-    "razorpay": "^2.9.8"
+    "razorpay": "^2.9.8",
+    "resend": "^6.26.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -1,92 +1,74 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import dotenv from "dotenv";
+
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const sendOtpEmail = async (toEmail, otp, purpose = "Verification") => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️ EMAIL_USER or EMAIL_PASS not configured in .env");
-    return;
+/**
+ * Sends an email via the Resend API (HTTPS-based, not SMTP).
+ * Works reliably on Render/Railway/etc where SMTP ports are often blocked.
+ *
+ * NOTE: Until you verify your own domain on Resend, the "from" address
+ * MUST be "onboarding@resend.dev" — Resend rejects any other sender
+ * address on unverified accounts. Once you verify nutriexa.com (or
+ * whichever domain) under Resend > Domains, change FROM_EMAIL below.
+ */
+const FROM_EMAIL = "Nutriexa <onboarding@resend.dev>";
+
+export async function sendOTPEmail(toEmail, otp, name = "") {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: "Your Nutriexa Verification Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #4CAF37;">Nutriexa</h2>
+          <p>Hi ${name || "there"},</p>
+          <p>Your 6-digit verification code is:</p>
+          <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1a1a1a;">
+            ${otp}
+          </p>
+          <p style="color: #666; font-size: 13px;">
+            This code expires in 10 minutes. If you didn't request this, you can ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("⚠️ Resend email failed:", error);
+      throw new Error(error.message || "Failed to send email.");
+    }
+
+    console.log("✅ OTP email sent:", data.id);
+    return data;
+  } catch (err) {
+    console.error("⚠️ Email sending error:", err.message);
+    throw err;
   }
+}
 
-  await transporter.sendMail({
-    from: `"Nutriexa Nutrition" <${process.env.EMAIL_USER}>`,
-    to: toEmail,
-    subject: `${otp} is your Nutriexa ${purpose} Code`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="margin: 0; padding: 0; background-color: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="min-height: 100vh; padding: 40px 10px;">
-          <tr>
-            <td align="center">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 480px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); border: 1px solid #eaeaea;">
-                <!-- Header -->
-                <tr>
-                  <td style="background-color: #1a1a1a; padding: 28px 24px; text-align: center;">
-                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">
-                      NUTRI<span style="color: #4CAF37;">EXA</span>
-                    </h1>
-                    <p style="margin: 4px 0 0 0; color: #a0a0a0; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;">
-                      Nutrition For Excellence
-                    </p>
-                  </td>
-                </tr>
+// Generic sender for any other transactional email you need later
+// (order confirmation, password reset, etc.)
+export async function sendEmail({ to, subject, html }) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+    });
 
-                <!-- Content -->
-                <tr>
-                  <td style="padding: 36px 32px; text-align: center;">
-                    <h2 style="margin: 0 0 8px 0; color: #1a1a1a; font-size: 20px; font-weight: 700;">
-                      ${purpose} Code
-                    </h2>
-                    <p style="margin: 0 0 24px 0; color: #666666; font-size: 14px; line-height: 1.5;">
-                      Use the following one-time password (OTP) to securely complete your request on Nutriexa:
-                    </p>
+    if (error) {
+      console.error("⚠️ Resend email failed:", error);
+      throw new Error(error.message || "Failed to send email.");
+    }
 
-                    <!-- OTP Box -->
-                    <div style="background-color: #f7fbf6; border: 2px dashed #4CAF37; border-radius: 12px; padding: 18px 24px; margin: 0 auto 24px auto; display: inline-block;">
-                      <span style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #1a1a1a;">
-                        ${otp}
-                      </span>
-                    </div>
-
-                    <p style="margin: 0 0 20px 0; color: #888888; font-size: 12px; line-height: 1.4;">
-                      ⏱️ This code is valid for <strong>10 minutes</strong>. Do not share this OTP with anyone, including Nutriexa representatives.
-                    </p>
-
-                    <div style="height: 1px; background-color: #f0f0f0; margin: 24px 0;"></div>
-
-                    <p style="margin: 0; color: #999999; font-size: 11px;">
-                      If you did not request this OTP code, please safely disregard this email.
-                    </p>
-                  </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr>
-                  <td style="background-color: #fafbf9; padding: 16px 24px; text-align: center; border-top: 1px solid #f0f0f0;">
-                    <p style="margin: 0; color: #999999; font-size: 11px;">
-                      &copy; ${new Date().getFullYear()} Nutriexa Supplements. All rights reserved.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `,
-  });
-};
+    return data;
+  } catch (err) {
+    console.error("⚠️ Email sending error:", err.message);
+    throw err;
+  }
+}
