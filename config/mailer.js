@@ -66,7 +66,7 @@ export async function sendEmail({ to, subject, html }) {
       throw new Error(error.message || "Failed to send email.");
     }
 
-    return data;
+    return data; 
   } catch (err) {
     console.error("⚠️ Email sending error:", err.message);
     throw err;

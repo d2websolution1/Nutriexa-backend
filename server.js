@@ -151,4 +151,4 @@ app.listen(PORT, async () => {
     console.error("❌ Supabase PostgreSQL connection/migration failed:");
     console.error("Message:", error.message);
   }
-});
+});
