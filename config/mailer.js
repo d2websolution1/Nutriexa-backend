@@ -16,7 +16,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  */
 const FROM_EMAIL = "Nutriexa <onboarding@resend.dev>";
 
-export async function sendOTPEmail(toEmail, otp, name = "") {
+export async function sendOtpEmail(toEmail, otp, name = "") {
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
