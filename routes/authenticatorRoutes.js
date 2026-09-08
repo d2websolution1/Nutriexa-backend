@@ -22,12 +22,15 @@ router.post("/verify", async (req, res) => {
   }
 
   try {
+    const cleanCode = code.trim().toUpperCase();
+    const compactCode = cleanCode.replace(/[^A-Z0-9]/g, "");
+
     const [rows] = await db.query(
-      `SELECT ac.*, p.name AS product_name, p.variant, p.image
+      `SELECT ac.*, p.name AS product_name, p.variant, p.image, p.id AS product_id
        FROM authenticity_codes ac
        JOIN products p ON p.id = ac.product_id
-       WHERE ac.code = ?`,
-      [code.trim().toUpperCase()]
+       WHERE ac.code = ? OR REPLACE(ac.code, '-', '') = ?`,
+      [cleanCode, compactCode]
     );
 
     if (rows.length === 0) {
@@ -44,9 +47,13 @@ router.post("/verify", async (req, res) => {
         valid: true,
         alreadyVerified: true,
         message: "This code has already been verified before.",
+        product_id: record.product_id,
         product_name: record.product_name,
         variant: record.variant,
         image: record.image,
+        batch_number: record.batch_number,
+        manufactured_date: record.manufactured_date,
+        code: record.code,
         verified_at: record.verified_at,
       });
     }
@@ -60,9 +67,14 @@ router.post("/verify", async (req, res) => {
       valid: true,
       alreadyVerified: false,
       message: "Genuine Nutriexa product. Verified successfully!",
+      product_id: record.product_id,
       product_name: record.product_name,
       variant: record.variant,
       image: record.image,
+      batch_number: record.batch_number,
+      manufactured_date: record.manufactured_date,
+      code: record.code,
+      verified_at: new Date(),
     });
   } catch (err) {
     res.status(500).json({ message: "Verification failed.", error: err.message });

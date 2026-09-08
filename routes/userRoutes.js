@@ -73,7 +73,7 @@ router.post("/signup", async (req, res) => {
 
     // Send Real OTP Email via Gmail SMTP
     try {
-      await sendOtpEmail(cleanEmail, otp, "Signup Verification");
+      await sendOtpEmail(cleanEmail, otp, name);
       console.log(`✉️ Real OTP Email sent to ${cleanEmail}: ${otp}`);
     } catch (mailErr) {
       console.warn("⚠️ SMTP email sending failed:", mailErr.message);
@@ -222,7 +222,7 @@ router.post("/resend-otp", async (req, res) => {
     ]);
 
     try {
-      await sendOtpEmail(user.email, otp, "Signup Verification");
+      await sendOtpEmail(user.email, otp, user.name);
       console.log(`✉️ Resent OTP to ${user.email}: ${otp}`);
     } catch (mailErr) {
       console.warn("⚠️ SMTP email resend failed:", mailErr.message);
@@ -269,7 +269,7 @@ router.post("/forgot-password", async (req, res) => {
     ]);
 
     try {
-      await sendOtpEmail(user.email, otp, "Password Reset");
+      await sendOtpEmail(user.email, otp, user.name);
       console.log(`✉️ Password reset OTP sent to ${user.email}: ${otp}`);
     } catch (mailErr) {
       console.warn("⚠️ SMTP email reset failed:", mailErr.message);

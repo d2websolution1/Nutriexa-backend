@@ -146,6 +146,18 @@ app.listen(PORT, async () => {
         is_default BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS authenticity_codes (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+        batch_number VARCHAR(100),
+        manufactured_date DATE,
+        is_verified SMALLINT DEFAULT 0,
+        verified_at TIMESTAMP,
+        verified_ip VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
   } catch (error) {
     console.error("❌ Supabase PostgreSQL connection/migration failed:");
