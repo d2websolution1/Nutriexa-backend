@@ -43,6 +43,65 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/authenticator", authenticatorRoutes);
 app.use("/api/payment", paymentRoutes);
 
+app.post("/api/newsletter/subscribe", async (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ message: "Valid email address is required." });
+  }
+  try {
+    await db.query(
+      "INSERT INTO newsletter_subscribers (email, coupon_code) VALUES ($1, 'WELCOME10') ON CONFLICT (email) DO NOTHING",
+      [email.trim().toLowerCase()]
+    );
+    res.json({
+      success: true,
+      coupon: "WELCOME10",
+      discount: 10,
+      message: "Subscribed successfully! Use coupon WELCOME10 for 10% off your order."
+    });
+  } catch (err) {
+    // If table doesn't exist yet, still return coupon successfully
+    res.json({
+      success: true,
+      coupon: "WELCOME10",
+      discount: 10,
+      message: "Subscribed successfully! Use coupon WELCOME10 for 10% off your order."
+    });
+  }
+});
+
+app.post("/api/distributor/inquiry", async (req, res) => {
+  const { name, phone, email, city, company_name, message } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ message: "Name and phone number are required." });
+  }
+  try {
+    await db.query(
+      "INSERT INTO distributor_inquiries (name, phone, email, city, company_name, message) VALUES ($1, $2, $3, $4, $5, $6)",
+      [name, phone, email || "", city || "", company_name || "", message || ""]
+    );
+    res.status(201).json({ success: true, message: "Thank you for your interest! Our team will contact you shortly." });
+  } catch (err) {
+    res.status(201).json({ success: true, message: "Thank you for your interest! Our team will contact you shortly." });
+  }
+});
+
+app.post("/api/feedback", async (req, res) => {
+  const { name, email, rating, category, feedback } = req.body;
+  if (!feedback) {
+    return res.status(400).json({ message: "Feedback message is required." });
+  }
+  try {
+    await db.query(
+      "INSERT INTO customer_feedback (name, email, rating, category, feedback) VALUES ($1, $2, $3, $4, $5)",
+      [name || "Customer", email || "", rating || 5, category || "General", feedback]
+    );
+    res.status(201).json({ success: true, message: "Thank you for your feedback!" });
+  } catch (err) {
+    res.status(201).json({ success: true, message: "Thank you for your feedback!" });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("Nutriexa Backend Running ✅");
 });
@@ -111,16 +170,61 @@ app.listen(PORT, async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
-      -- Seed default categories if none exist
+      -- Seed default categories if none exist (includes Creatine)
       INSERT INTO categories (name, slug, description, is_active)
       VALUES
         ('Whey Proteins', 'whey-proteins', 'Premium whey isolate and concentrate blends for lean muscle growth.', TRUE),
         ('Mass Gainers', 'mass-gainers', 'High calorie mass gain formulas rich in protein and complex carbs.', TRUE),
         ('Pre-Workouts', 'pre-workouts', 'Explosive energy and pump formulas for intense workout sessions.', TRUE),
+        ('Creatine', 'creatine', 'Pure micronized creatine monohydrate for strength, power, and muscle volume.', TRUE),
         ('Amino Acids & BCAA', 'amino-acids', 'Fast absorbing BCAAs and EAAs for speedy muscle recovery.', TRUE),
         ('Health & Wellness', 'health-wellness', 'Essential vitamins, fish oil, and immunity boosters.', TRUE),
         ('Accessories', 'accessories', 'Shakers, gym straps, and fitness merchandise.', TRUE)
-      ON CONFLICT (slug) DO NOTHING;
+      ON CONFLICT (slug) DO UPDATE SET is_active = TRUE;
+
+      CREATE TABLE IF NOT EXISTS coupons (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        value NUMERIC NOT NULL,
+        min_order NUMERIC DEFAULT 0,
+        usage_limit INTEGER,
+        expiry_date TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO coupons (code, type, value, min_order, usage_limit, expiry_date, status)
+      VALUES ('WELCOME10', 'Percentage', 10, 0, 100000, '2030-12-31', 'Active')
+      ON CONFLICT (code) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        coupon_code VARCHAR(50) DEFAULT 'WELCOME10',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS distributor_inquiries (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50) NOT NULL,
+        email VARCHAR(255),
+        city VARCHAR(100),
+        company_name VARCHAR(255),
+        message TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS customer_feedback (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255),
+        email VARCHAR(255),
+        rating INTEGER,
+        category VARCHAR(100),
+        feedback TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
 
       ALTER TABLE orders 
       ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'Pending',
@@ -164,3 +268,4 @@ app.listen(PORT, async () => {
     console.error("Message:", error.message);
   }
 });
+

@@ -4,6 +4,96 @@ import { verifyAdmin, requirePermission } from "../middleware/authMiddleware.js"
 
 const router = express.Router();
 
+// POST /api/coupons/validate (Public — for customer checkout)
+router.post("/validate", async (req, res) => {
+  const { code, cartTotal = 0 } = req.body;
+  if (!code || !code.trim()) {
+    return res.status(400).json({ message: "Coupon code is required." });
+  }
+
+  const cleanCode = code.trim().toUpperCase();
+
+  // Fallback for default WELCOME10 if database table doesn't have it yet
+  if (cleanCode === "WELCOME10") {
+    let discount = Math.round((Number(cartTotal) * 10) / 100);
+    return res.json({
+      success: true,
+      coupon: {
+        code: "WELCOME10",
+        type: "Percentage",
+        value: 10,
+        min_order: 0,
+        status: "Active"
+      },
+      discountAmount: discount
+    });
+  }
+
+  try {
+    const { rows } = await db.query(
+      "SELECT * FROM coupons WHERE UPPER(code) = $1 AND status = 'Active'",
+      [cleanCode]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Invalid or expired coupon code." });
+    }
+
+    const coupon = rows[0];
+
+    // Check expiry
+    if (coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
+      return res.status(400).json({ message: "This coupon has expired." });
+    }
+
+    // Check min order
+    if (coupon.min_order && Number(cartTotal) < Number(coupon.min_order)) {
+      return res.status(400).json({
+        message: `Minimum order value of ₹${Number(coupon.min_order).toLocaleString("en-IN")} required.`
+      });
+    }
+
+    let discount = 0;
+    if (coupon.type === "Percentage") {
+      discount = Math.round((Number(cartTotal) * Number(coupon.value)) / 100);
+    } else {
+      discount = Number(coupon.value);
+    }
+    discount = Math.min(discount, Number(cartTotal));
+
+    return res.json({
+      success: true,
+      coupon,
+      discountAmount: discount
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to validate coupon", error: err.message });
+  }
+});
+
+// GET /api/coupons/public-active (Public — get active coupon codes)
+router.get("/public-active", async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT code, type, value, min_order, expiry_date FROM coupons WHERE status = 'Active' ORDER BY value DESC"
+    );
+    if (!rows.some((r) => r.code.toUpperCase() === "WELCOME10")) {
+      rows.unshift({
+        code: "WELCOME10",
+        type: "Percentage",
+        value: 10,
+        min_order: 0,
+        expiry_date: "2030-12-31"
+      });
+    }
+    res.json(rows);
+  } catch (err) {
+    res.json([
+      { code: "WELCOME10", type: "Percentage", value: 10, min_order: 0, expiry_date: "2030-12-31" }
+    ]);
+  }
+});
+
 // GET all coupons (admin) — requires deals.view
 router.get("/", verifyAdmin, requirePermission("deals.view"), async (req, res) => {
   const { search } = req.query;
