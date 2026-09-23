@@ -13,6 +13,9 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 }
 
@@ -56,12 +59,16 @@ export async function sendOtpEmail(toEmail, otp, name = "") {
   // Try Nodemailer first if configured
   if (nodemailerTransporter) {
     try {
-      const info = await nodemailerTransporter.sendMail({
-        from: `"Nutriexa" <${process.env.EMAIL_USER}>`,
-        to: toEmail,
-        subject: `${otp} is your Nutriexa verification code`,
-        html: htmlContent,
-      });
+      const info = await withTimeout(
+        nodemailerTransporter.sendMail({
+          from: `"Nutriexa" <${process.env.EMAIL_USER}>`,
+          to: toEmail,
+          subject: `${otp} is your Nutriexa verification code`,
+          html: htmlContent,
+        }),
+        8000,
+        "Nodemailer sendMail"
+      );
       console.log(`✅ [Nodemailer] OTP email sent successfully to ${toEmail} (ID: ${info.messageId})`);
       return { success: true, messageId: info.messageId, provider: "nodemailer" };
     } catch (nmErr) {
@@ -73,12 +80,16 @@ export async function sendOtpEmail(toEmail, otp, name = "") {
   // Fallback to Resend
   if (resend) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: FROM_EMAIL,
-        to: toEmail,
-        subject: `${otp} is your Nutriexa verification code`,
-        html: htmlContent,
-      });
+      const { data, error } = await withTimeout(
+        resend.emails.send({
+          from: FROM_EMAIL,
+          to: toEmail,
+          subject: `${otp} is your Nutriexa verification code`,
+          html: htmlContent,
+        }),
+        8000,
+        "Resend email send"
+      );
 
       if (error) {
         console.error("⚠️ [Resend] Failed to send email:", error);
@@ -124,5 +135,21 @@ export async function sendEmail({ to, subject, html }) {
 
   throw new Error("No email provider available.");
 }
+
+const withTimeout = async (task, timeoutMs, label) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([task, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 export default { sendOtpEmail, sendEmail };
