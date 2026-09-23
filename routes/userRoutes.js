@@ -72,16 +72,21 @@ router.post("/signup", async (req, res) => {
     }
 
     // Send Real OTP Email via Gmail SMTP
+    let emailSent = false;
     try {
       await sendOtpEmail(cleanEmail, otp, name);
       console.log(`✉️ Real OTP Email sent to ${cleanEmail}: ${otp}`);
+      emailSent = true;
     } catch (mailErr) {
       console.warn("⚠️ SMTP email sending failed:", mailErr.message);
     }
 
     res.status(200).json({
-      message: `OTP verification code sent to email ${cleanEmail}.`,
+      message: emailSent
+        ? `OTP verification code sent to email ${cleanEmail}.`
+        : `Account created. OTP delivery is taking longer than expected. Please check your inbox or click Resend OTP.`,
       email: cleanEmail,
+      emailSent,
       testOtp: otp,
     });
   } catch (err) {
@@ -221,14 +226,22 @@ router.post("/resend-otp", async (req, res) => {
       user.id,
     ]);
 
+    let emailSent = false;
     try {
       await sendOtpEmail(user.email, otp, user.name);
       console.log(`✉️ Resent OTP to ${user.email}: ${otp}`);
+      emailSent = true;
     } catch (mailErr) {
       console.warn("⚠️ SMTP email resend failed:", mailErr.message);
     }
 
-    res.json({ message: "A fresh OTP has been sent to your email.", testOtp: otp });
+    res.json({
+      message: emailSent
+        ? "A fresh OTP has been sent to your email."
+        : "Failed to deliver OTP to email. Please verify your email or click resend.",
+      emailSent,
+      testOtp: otp,
+    });
   } catch (err) {
     console.error("Resend OTP error:", err);
     res.status(500).json({ message: "Failed to resend OTP." });
@@ -268,16 +281,21 @@ router.post("/forgot-password", async (req, res) => {
       user.id,
     ]);
 
+    let emailSent = false;
     try {
       await sendOtpEmail(user.email, otp, user.name);
       console.log(`✉️ Password reset OTP sent to ${user.email}: ${otp}`);
+      emailSent = true;
     } catch (mailErr) {
       console.warn("⚠️ SMTP email reset failed:", mailErr.message);
     }
 
     res.status(200).json({
-      message: `Password reset OTP sent to email ${user.email}.`,
+      message: emailSent
+        ? `Password reset OTP sent to email ${user.email}.`
+        : "Unable to deliver OTP email right now. Please try again.",
       email: user.email,
+      emailSent,
       testOtp: otp,
     });
   } catch (err) {
