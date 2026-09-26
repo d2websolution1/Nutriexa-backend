@@ -77,7 +77,7 @@ router.post("/bulk-import", verifyAdmin, requirePermission("products.create"), a
 });
 
 // CREATE product (admin only — requires products.create)
-router.post("/", verifyAdmin, requirePermission("products.create"), upload.array("images", 5), async (req, res) => {
+router.post("/", verifyAdmin, requirePermission("products.create"), upload.array("images", 15), async (req, res) => {
   const { name, sku, variant, category, price, mrp, stock, status, description } = req.body;
 
   if (!name || !category || !price) {
@@ -107,8 +107,30 @@ router.post("/", verifyAdmin, requirePermission("products.create"), upload.array
   }
 });
 
+// QUICK STATUS UPDATE (admin only — requires products.edit)
+router.patch("/:id/status", verifyAdmin, requirePermission("products.edit"), async (req, res) => {
+  const { status } = req.body;
+  const { id } = req.params;
+
+  if (!status) {
+    return res.status(400).json({ message: "Status is required." });
+  }
+
+  try {
+    const [existingRows] = await db.query("SELECT id FROM products WHERE id = $1", [id]);
+    if (existingRows.length === 0) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    await db.query("UPDATE products SET status = $1 WHERE id = $2", [status, id]);
+    res.json({ message: `Product status updated to ${status}.`, status });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update product status.", error: err.message });
+  }
+});
+
 // UPDATE product (admin only — requires products.edit)
-router.put("/:id", verifyAdmin, requirePermission("products.edit"), upload.array("images", 5), async (req, res) => {
+router.put("/:id", verifyAdmin, requirePermission("products.edit"), upload.array("images", 15), async (req, res) => {
   const { name, sku, variant, category, price, mrp, stock, status, description } = req.body;
   // existingImages: JSON string of images the admin wants to keep (sent from frontend)
   let { existingImages } = req.body;

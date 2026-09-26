@@ -167,8 +167,11 @@ app.listen(PORT, async () => {
         description TEXT,
         image TEXT,
         is_active BOOLEAN DEFAULT TRUE,
+        status VARCHAR(50) DEFAULT 'Active',
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Active';
 
       -- Seed default categories if none exist (includes Creatine)
       INSERT INTO categories (name, slug, description, is_active)
