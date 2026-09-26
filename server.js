@@ -16,6 +16,8 @@ import staffRoutes from "./routes/staffRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 
 import paymentRoutes from "./routes/paymentRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+import cmsRoutes from "./routes/cmsRoutes.js";
 
 import db from "./config/db.js";
 
@@ -42,6 +44,8 @@ app.use("/api/admin/dashboard", dashboardRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/authenticator", authenticatorRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/cms", cmsRoutes);
 
 app.post("/api/newsletter/subscribe", async (req, res) => {
   const { email } = req.body;
@@ -267,6 +271,68 @@ app.listen(PORT, async () => {
         verified_ip VARCHAR(100),
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS product_reviews (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER,
+        product_name VARCHAR(255) NOT NULL,
+        product_image TEXT,
+        customer_name VARCHAR(255) NOT NULL,
+        customer_email VARCHAR(255),
+        rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        title VARCHAR(255),
+        comment TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Approved',
+        helpful INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Seed initial product reviews if table is empty
+      INSERT INTO product_reviews (product_name, customer_name, customer_email, rating, title, comment, status, helpful, created_at)
+      SELECT 'Nitro Tech Whey Protein', 'Rahul Sharma', 'rahul@example.com', 5, 'Best protein powder ever!', 'Absolutely love this product. Great taste and amazing results after just 4 weeks.', 'Approved', 24, NOW() - INTERVAL '10 days'
+      WHERE NOT EXISTS (SELECT 1 FROM product_reviews);
+
+      INSERT INTO product_reviews (product_name, customer_name, customer_email, rating, title, comment, status, helpful, created_at)
+      SELECT 'Mass Gainer Pro 6KG', 'Priya Singh', 'priya@example.com', 4, 'Good product, slightly expensive', 'Works well for muscle gain. Chocolate flavor is delicious. A bit pricey but worth it.', 'Pending', 8, NOW() - INTERVAL '8 days'
+      WHERE (SELECT COUNT(*) FROM product_reviews) = 1;
+
+      INSERT INTO product_reviews (product_name, customer_name, customer_email, rating, title, comment, status, helpful, created_at)
+      SELECT 'Pre-Workout Ignite', 'Arjun Patel', 'arjun@example.com', 3, 'Average product', 'Decent pump but causes jitters. Not recommended for beginners.', 'Pending', 5, NOW() - INTERVAL '6 days'
+      WHERE (SELECT COUNT(*) FROM product_reviews) = 2;
+
+      INSERT INTO product_reviews (product_name, customer_name, customer_email, rating, title, comment, status, helpful, created_at)
+      SELECT 'BCAA Ultra Blend', 'Sneha Rao', 'sneha@example.com', 2, 'Disappointed with taste', 'Product quality is okay but taste is really bad. Would not buy again.', 'Rejected', 2, NOW() - INTERVAL '4 days'
+      WHERE (SELECT COUNT(*) FROM product_reviews) = 3;
+
+      INSERT INTO product_reviews (product_name, customer_name, customer_email, rating, title, comment, status, helpful, created_at)
+      SELECT 'Omega-3 Fish Oil', 'Vikram Kumar', 'vikram@example.com', 5, 'Pure and effective', 'No fishy aftertaste. Excellent quality capsules. Highly recommended for everyone.', 'Approved', 31, NOW() - INTERVAL '2 days'
+      WHERE (SELECT COUNT(*) FROM product_reviews) = 4;
+
+      CREATE TABLE IF NOT EXISTS hero_banners (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        subtitle TEXT,
+        cta VARCHAR(100) DEFAULT 'Shop Now',
+        cta_link VARCHAR(255) DEFAULT '/products',
+        image TEXT,
+        bg_gradient VARCHAR(255) DEFAULT 'from-indigo-600 to-purple-700',
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Seed initial hero banners if table is empty
+      INSERT INTO hero_banners (title, subtitle, cta, cta_link, image, bg_gradient, is_active, sort_order)
+      SELECT 'Summer Sale - Up to 50% OFF', 'On all Whey Proteins & Mass Gainers', 'Shop Now', '/deals', '', 'from-indigo-600 to-purple-700', TRUE, 1
+      WHERE NOT EXISTS (SELECT 1 FROM hero_banners);
+
+      INSERT INTO hero_banners (title, subtitle, cta, cta_link, image, bg_gradient, is_active, sort_order)
+      SELECT 'New Arrivals: Pre-Workout Stack', 'Maximum Energy. Maximum Results.', 'Explore Now', '/products', '', 'from-emerald-600 to-teal-700', TRUE, 2
+      WHERE (SELECT COUNT(*) FROM hero_banners) = 1;
+
+      INSERT INTO hero_banners (title, subtitle, cta, cta_link, image, bg_gradient, is_active, sort_order)
+      SELECT 'Free Shipping on Orders ₹999+', 'Limited time offer. Don''t miss out!', 'Buy Now', '/products', '', 'from-orange-500 to-rose-600', FALSE, 3
+      WHERE (SELECT COUNT(*) FROM hero_banners) = 2;
     `);
   } catch (error) {
     console.error("❌ Supabase PostgreSQL connection/migration failed:");
