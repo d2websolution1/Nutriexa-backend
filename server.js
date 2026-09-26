@@ -156,6 +156,8 @@ app.listen(PORT, async () => {
       ADD COLUMN IF NOT EXISTS images TEXT,
       ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
 
+      ALTER TABLE products ALTER COLUMN status TYPE VARCHAR(50) USING status::text;
+
       UPDATE products 
       SET sku = 'NX-' || UPPER(SUBSTRING(COALESCE(category, 'PRD') FROM 1 FOR 4)) || '-' || LPAD(id::text, 4, '0') 
       WHERE sku IS NULL OR sku = '';

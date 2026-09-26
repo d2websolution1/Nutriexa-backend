@@ -107,8 +107,8 @@ router.post("/", verifyAdmin, requirePermission("products.create"), upload.array
   }
 });
 
-// QUICK STATUS UPDATE (admin only — requires products.edit)
-router.patch("/:id/status", verifyAdmin, requirePermission("products.edit"), async (req, res) => {
+// QUICK STATUS UPDATE (admin only — requires products.edit or products.create)
+router.patch("/:id/status", verifyAdmin, requirePermission(["products.edit", "products.create"]), async (req, res) => {
   const { status } = req.body;
   const { id } = req.params;
 
