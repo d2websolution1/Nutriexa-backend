@@ -245,6 +245,8 @@ app.listen(PORT, async () => {
       ADD COLUMN IF NOT EXISTS shipping_state VARCHAR(100),
       ADD COLUMN IF NOT EXISTS shipping_pincode VARCHAR(20);
 
+      ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(50) USING status::text;
+
       CREATE TABLE IF NOT EXISTS user_addresses (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,

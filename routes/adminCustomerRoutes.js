@@ -19,12 +19,12 @@ router.get("/", verifyAdmin, requirePermission(["customers.view", "customers.man
         u.is_verified, 
         u.created_at,
         COUNT(o.id)::integer AS total_orders,
-        COALESCE(SUM(CASE WHEN o.status != 'Cancelled' THEN o.total_amount ELSE 0 END), 0)::numeric AS total_spent,
-        COALESCE(SUM(CASE WHEN o.status = 'Pending' OR o.status = 'Processing' THEN 1 ELSE 0 END), 0)::integer AS pending_orders,
-        COALESCE(SUM(CASE WHEN o.status = 'Delivered' THEN 1 ELSE 0 END), 0)::integer AS delivered_orders,
+        COALESCE(SUM(CASE WHEN o.status::text != 'Cancelled' THEN o.total_amount ELSE 0 END), 0)::numeric AS total_spent,
+        COALESCE(SUM(CASE WHEN o.status::text = 'Pending' OR o.status::text = 'Processing' THEN 1 ELSE 0 END), 0)::integer AS pending_orders,
+        COALESCE(SUM(CASE WHEN o.status::text = 'Delivered' THEN 1 ELSE 0 END), 0)::integer AS delivered_orders,
         MAX(o.created_at) AS last_order_date
       FROM users u
-      LEFT JOIN orders o ON (o.customer_id = u.id OR (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = LOWER(u.email)))
+      LEFT JOIN orders o ON (o.customer_id = u.id OR (u.email IS NOT NULL AND o.customer_email IS NOT NULL AND LOWER(o.customer_email) = LOWER(u.email)))
       GROUP BY u.id, u.name, u.email, u.phone, u.is_verified, u.created_at
       ORDER BY u.created_at DESC
     `);
@@ -85,9 +85,9 @@ router.get("/:id", verifyAdmin, requirePermission(["customers.view", "customers.
           WHERE oi.order_id = o.id
         ) AS items
       FROM orders o
-      WHERE o.customer_id = $1 OR (o.customer_email IS NOT NULL AND LOWER(o.customer_email) = LOWER($2))
+      WHERE o.customer_id = $1 OR ($2::text IS NOT NULL AND o.customer_email IS NOT NULL AND LOWER(o.customer_email) = LOWER($2))
       ORDER BY o.created_at DESC`,
-      [user.id, user.email]
+      [user.id, user.email || null]
     );
 
     const totalOrders = orders.length;
