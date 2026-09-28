@@ -69,10 +69,17 @@ export function requirePermission(requiredPerms) {
       return res.status(401).json({ message: "Unauthorized. Authentication required." });
     }
 
-    const { role, permissions = [] } = req.admin;
+    const { role = "", permissions = [] } = req.admin;
 
-    // Super Admin has full unrestricted access
-    if (role === "Super Admin" || permissions.includes("*")) {
+    // Super Admin and any Admin account has full unrestricted access
+    const isSuperOrAdmin =
+      role === "Super Admin" ||
+      role === "admin" ||
+      role === "Admin" ||
+      (typeof role === "string" && role.toLowerCase().includes("admin")) ||
+      permissions.includes("*");
+
+    if (isSuperOrAdmin) {
       return next();
     }
 
