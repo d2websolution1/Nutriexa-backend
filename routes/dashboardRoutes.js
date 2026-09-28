@@ -14,6 +14,9 @@ router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, re
   try {
     const range = (req.query.range || "week").toLowerCase();
     const paymentFilter = (req.query.paymentStatus || "all").toLowerCase();
+    const reqStartDate = req.query.startDate;
+    const reqEndDate = req.query.endDate;
+    const isCustom = Boolean(reqStartDate && reqEndDate && /^\d{4}-\d{2}-\d{2}$/.test(reqStartDate) && /^\d{4}-\d{2}-\d{2}$/.test(reqEndDate));
 
     // 1. Payment filter condition for SQL queries
     let paymentClause = "";
@@ -34,7 +37,28 @@ router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, re
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed
 
-    if (range === "month") {
+    if (isCustom) {
+      const sDate = new Date(`${reqStartDate}T00:00:00`);
+      const eDate = new Date(`${reqEndDate}T23:59:59`);
+      const diffDays = Math.max(1, Math.round((eDate - sDate) / (1000 * 60 * 60 * 24)));
+      
+      currentFilterSQL = `created_at >= '${reqStartDate} 00:00:00' AND created_at <= '${reqEndDate} 23:59:59'`;
+      prevFilterSQL = `created_at >= '${reqStartDate} 00:00:00'::timestamp - INTERVAL '${diffDays} days' AND created_at < '${reqStartDate} 00:00:00'`;
+      
+      const sFormatted = sDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const eFormatted = eDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      dateRangeLabel = `${sFormatted} - ${eFormatted}`;
+    } else if (range === "today") {
+      currentFilterSQL = "created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'";
+      prevFilterSQL = "created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE";
+      dateRangeLabel = `Today (${now.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })})`;
+    } else if (range === "yesterday") {
+      currentFilterSQL = "created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE";
+      prevFilterSQL = "created_at >= CURRENT_DATE - INTERVAL '2 days' AND created_at < CURRENT_DATE - INTERVAL '1 day'";
+      const yDate = new Date(now);
+      yDate.setDate(now.getDate() - 1);
+      dateRangeLabel = `Yesterday (${yDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })})`;
+    } else if (range === "month") {
       currentFilterSQL = "created_at >= DATE_TRUNC('month', NOW()) AND created_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'";
       prevFilterSQL = "created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND created_at < DATE_TRUNC('month', NOW())";
 
@@ -48,6 +72,10 @@ router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, re
       prevFilterSQL = "created_at >= DATE_TRUNC('year', NOW()) - INTERVAL '1 year' AND created_at < DATE_TRUNC('year', NOW())";
 
       dateRangeLabel = `01 Jan ${currentYear} - 31 Dec ${currentYear}`;
+    } else if (range === "all") {
+      currentFilterSQL = "created_at >= '2000-01-01'";
+      prevFilterSQL = "1=0";
+      dateRangeLabel = "All Time Analytics";
     } else {
       // Default: "week" (last 7 days ending today)
       currentFilterSQL = "created_at >= CURRENT_DATE - INTERVAL '6 days'";
@@ -159,7 +187,105 @@ router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, re
     // 5. Timeline Chart Construction (Real Data Only - Zero Mock Fallback)
     const timeline = [];
 
-    if (range === "year") {
+    if (isCustom) {
+      const sDate = new Date(`${reqStartDate}T00:00:00`);
+      const eDate = new Date(`${reqEndDate}T23:59:59`);
+      const diffDays = Math.max(1, Math.round((eDate - sDate) / (1000 * 60 * 60 * 24)));
+
+      if (diffDays <= 31) {
+        const { rows: dailyRows } = await db.query(`
+          SELECT 
+            TO_CHAR(created_at, 'YYYY-MM-DD') AS day_date,
+            TO_CHAR(created_at, 'DD Mon') AS day_label,
+            COALESCE(SUM(total_amount), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN payment_status = 'Paid' OR status = 'Delivered' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+            COUNT(*) AS orders
+          FROM orders
+          WHERE created_at >= '${reqStartDate} 00:00:00'
+            AND created_at <= '${reqEndDate} 23:59:59'
+            AND status != 'Cancelled'
+            ${paymentClause}
+          GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD'), TO_CHAR(created_at, 'DD Mon')
+          ORDER BY day_date ASC
+        `);
+
+        for (let d = 0; d <= diffDays; d++) {
+          const cur = new Date(sDate);
+          cur.setDate(sDate.getDate() + d);
+          if (cur > eDate) break;
+          const dateStr = cur.toISOString().split("T")[0];
+          const label = cur.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+          const fullDate = cur.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+          const found = dailyRows.find(r => r.day_date === dateStr);
+
+          timeline.push({
+            date: label,
+            fullDate,
+            revenue: found ? Number(found.revenue) : 0,
+            paidRevenue: found ? Number(found.paid_revenue) : 0,
+            orders: found ? Number(found.orders) : 0,
+          });
+        }
+      } else {
+        const { rows: monthlyRows } = await db.query(`
+          SELECT 
+            TO_CHAR(created_at, 'YYYY-MM') AS month_key,
+            TO_CHAR(created_at, 'Mon YY') AS month_label,
+            COALESCE(SUM(total_amount), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN payment_status = 'Paid' OR status = 'Delivered' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+            COUNT(*) AS orders
+          FROM orders
+          WHERE created_at >= '${reqStartDate} 00:00:00'
+            AND created_at <= '${reqEndDate} 23:59:59'
+            AND status != 'Cancelled'
+            ${paymentClause}
+          GROUP BY TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon YY')
+          ORDER BY month_key ASC
+        `);
+
+        monthlyRows.forEach(r => {
+          timeline.push({
+            date: r.month_label,
+            fullDate: r.month_label,
+            revenue: Number(r.revenue),
+            paidRevenue: Number(r.paid_revenue),
+            orders: Number(r.orders),
+          });
+        });
+      }
+    } else if (range === "today" || range === "yesterday") {
+      const targetDate = range === "today" ? now : new Date(Date.now() - 86400000);
+      const { rows: hourRows } = await db.query(`
+        SELECT 
+          EXTRACT(HOUR FROM created_at)::integer AS hour_num,
+          COALESCE(SUM(total_amount), 0) AS revenue,
+          COALESCE(SUM(CASE WHEN payment_status = 'Paid' OR status = 'Delivered' THEN total_amount ELSE 0 END), 0) AS paid_revenue,
+          COUNT(*) AS orders
+        FROM orders
+        WHERE ${currentFilterSQL}
+          AND status != 'Cancelled'
+          ${paymentClause}
+        GROUP BY EXTRACT(HOUR FROM created_at)
+        ORDER BY hour_num ASC
+      `);
+
+      for (let h = 0; h < 24; h += 4) {
+        const hLabel = `${String(h).padStart(2, "0")}:00`;
+        const nextH = h + 4;
+        const found = hourRows.filter(r => r.hour_num >= h && r.hour_num < nextH);
+        const rev = found.reduce((acc, x) => acc + Number(x.revenue), 0);
+        const paidRev = found.reduce((acc, x) => acc + Number(x.paid_revenue), 0);
+        const ord = found.reduce((acc, x) => acc + Number(x.orders), 0);
+
+        timeline.push({
+          date: hLabel,
+          fullDate: `${hLabel} - ${targetDate.toLocaleDateString("en-GB")}`,
+          revenue: rev,
+          paidRevenue: paidRev,
+          orders: ord,
+        });
+      }
+    } else if (range === "year") {
       // 12 calendar months: Jan - Dec
       const { rows: yearRows } = await db.query(`
         SELECT 
@@ -375,6 +501,77 @@ router.get("/", verifyAdmin, requirePermission("dashboard.view"), async (req, re
   } catch (err) {
     console.error("Dashboard route error:", err);
     res.status(500).json({ message: "Failed to load dashboard data.", error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/dashboard/notifications
+ * Returns live recent notifications from database (orders, low inventory, dealership inquiries)
+ */
+router.get("/notifications", verifyAdmin, async (req, res) => {
+  try {
+    const list = [];
+
+    // 1. Recent orders
+    try {
+      const { rows: orders } = await db.query(
+        "SELECT id, order_number, customer_name, total_amount, status, created_at FROM orders ORDER BY created_at DESC LIMIT 5"
+      );
+      orders.forEach((o) => {
+        list.push({
+          id: `ord-${o.id}`,
+          type: "order",
+          title: `New Order #${o.order_number}`,
+          message: `${o.customer_name || "Customer"} placed order of ₹${Number(o.total_amount).toLocaleString("en-IN")} (${o.status})`,
+          time: o.created_at,
+          link: "/admin/orders",
+        });
+      });
+    } catch (e) {
+      console.warn("Orders not fetched for notifications:", e.message);
+    }
+
+    // 2. Low / Out of stock inventory
+    try {
+      const { rows: lowStocks } = await db.query(
+        "SELECT id, name, stock, status FROM products WHERE stock <= 5 ORDER BY stock ASC LIMIT 4"
+      );
+      lowStocks.forEach((p) => {
+        list.push({
+          id: `stk-${p.id}`,
+          type: "stock",
+          title: Number(p.stock) <= 0 ? "Out of Stock Warning" : "Low Stock Alert",
+          message: `${p.name} has only ${p.stock} units remaining in inventory.`,
+          time: new Date().toISOString(),
+          link: "/admin/inventory",
+        });
+      });
+    } catch (e) {
+      console.warn("Products not fetched for notifications:", e.message);
+    }
+
+    // 3. Recent distributor inquiries
+    try {
+      const { rows: inquiries } = await db.query(
+        "SELECT id, name, city, company_name, created_at FROM distributor_inquiries ORDER BY created_at DESC LIMIT 3"
+      );
+      inquiries.forEach((iq) => {
+        list.push({
+          id: `inq-${iq.id}`,
+          type: "distributor",
+          title: "Distributor Application",
+          message: `${iq.name} from ${iq.city || "India"} submitted dealership inquiry.`,
+          time: iq.created_at || new Date().toISOString(),
+          link: "/admin/notifications",
+        });
+      });
+    } catch (e) {
+      // Table might not exist yet or empty
+    }
+
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
