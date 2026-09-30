@@ -1,5 +1,6 @@
 import express from "express";
 import db from "../config/db.js";
+import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
@@ -17,6 +18,38 @@ function mapBanner(row) {
     created_at: row.created_at,
   };
 }
+
+// POST upload banner image (via Cloudinary or file)
+router.post("/upload", (req, res) => {
+  upload.single("image")(req, res, (err) => {
+    if (err) {
+      console.error("Banner upload error:", err);
+      return res.status(400).json({ success: false, message: err.message || "Failed to upload image." });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file provided." });
+    }
+    const imageUrl = req.file.path || req.file.secure_url || req.file.url;
+    res.json({
+      success: true,
+      message: "Image uploaded successfully!",
+      url: imageUrl,
+    });
+  });
+});
+
+// GET product images for quick selection in banner CMS
+router.get("/product-images", async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT id, name, category, image FROM products WHERE image IS NOT NULL AND image != '' ORDER BY id DESC LIMIT 50"
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("Error fetching product images for CMS:", err);
+    res.status(500).json({ message: "Failed to fetch product images." });
+  }
+});
 
 // GET all banners (optional activeOnly query parameter)
 router.get("/banners", async (req, res) => {

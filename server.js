@@ -18,6 +18,7 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import cmsRoutes from "./routes/cmsRoutes.js";
+import shippingRoutes from "./routes/shippingRoutes.js";
 
 import db from "./config/db.js";
 
@@ -46,6 +47,7 @@ app.use("/api/authenticator", authenticatorRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/cms", cmsRoutes);
+app.use("/api/shipping", shippingRoutes);
 
 app.post("/api/newsletter/subscribe", async (req, res) => {
   const { email } = req.body;
@@ -335,6 +337,80 @@ app.listen(PORT, async () => {
       INSERT INTO hero_banners (title, subtitle, cta, cta_link, image, bg_gradient, is_active, sort_order)
       SELECT 'Free Shipping on Orders ₹999+', 'Limited time offer. Don''t miss out!', 'Buy Now', '/products', '', 'from-orange-500 to-rose-600', FALSE, 3
       WHERE (SELECT COUNT(*) FROM hero_banners) = 2;
+
+      CREATE TABLE IF NOT EXISTS shipping_zones (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        areas TEXT NOT NULL,
+        delivery_days VARCHAR(50) DEFAULT '3-5',
+        standard_rate NUMERIC(10,2) DEFAULT 49,
+        express_rate NUMERIC(10,2) DEFAULT 99,
+        free_above NUMERIC(10,2) DEFAULT 999,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO shipping_zones (name, areas, delivery_days, standard_rate, express_rate, free_above, is_active)
+      SELECT 'Metro Cities', 'Mumbai, Delhi, Bengaluru, Chennai, Hyderabad, Pune, Kolkata', '2-3', 0, 69, 999, TRUE
+      WHERE NOT EXISTS (SELECT 1 FROM shipping_zones);
+
+      INSERT INTO shipping_zones (name, areas, delivery_days, standard_rate, express_rate, free_above, is_active)
+      SELECT 'Tier-2 Cities', 'Jaipur, Lucknow, Surat, Ahmedabad, Chandigarh, Bhopal, Nagpur', '3-5', 49, 99, 999, TRUE
+      WHERE (SELECT COUNT(*) FROM shipping_zones) = 1;
+
+      INSERT INTO shipping_zones (name, areas, delivery_days, standard_rate, express_rate, free_above, is_active)
+      SELECT 'Rest of India', 'All remaining pin codes across India', '5-7', 79, 149, 1499, TRUE
+      WHERE (SELECT COUNT(*) FROM shipping_zones) = 2;
+
+      INSERT INTO shipping_zones (name, areas, delivery_days, standard_rate, express_rate, free_above, is_active)
+      SELECT 'Northeast & J&K', 'Assam, Meghalaya, Manipur, Nagaland, J&K, Ladakh', '7-12', 99, 0, 1999, FALSE
+      WHERE (SELECT COUNT(*) FROM shipping_zones) = 3;
+
+      CREATE TABLE IF NOT EXISTS delivery_partners (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        logo VARCHAR(50) DEFAULT '🚚',
+        status VARCHAR(50) DEFAULT 'Connected',
+        tracking_support BOOLEAN DEFAULT TRUE,
+        api_key TEXT,
+        account_id VARCHAR(100),
+        tracking_url TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO delivery_partners (name, logo, status, tracking_support, tracking_url)
+      SELECT 'Shiprocket', '🚀', 'Connected', TRUE, 'https://shiprocket.co/tracking/'
+      WHERE NOT EXISTS (SELECT 1 FROM delivery_partners);
+
+      INSERT INTO delivery_partners (name, logo, status, tracking_support, tracking_url)
+      SELECT 'Delhivery', '🔵', 'Connected', TRUE, 'https://www.delhivery.com/track/package/'
+      WHERE (SELECT COUNT(*) FROM delivery_partners) = 1;
+
+      INSERT INTO delivery_partners (name, logo, status, tracking_support, tracking_url)
+      SELECT 'BlueDart', '🔷', 'Disconnected', TRUE, 'https://www.bluedart.com/tracking'
+      WHERE (SELECT COUNT(*) FROM delivery_partners) = 2;
+
+      INSERT INTO delivery_partners (name, logo, status, tracking_support, tracking_url)
+      SELECT 'DTDC', '🟡', 'Disconnected', FALSE, 'https://www.dtdc.in/tracking'
+      WHERE (SELECT COUNT(*) FROM delivery_partners) = 3;
+
+      CREATE TABLE IF NOT EXISTS shipping_settings (
+        id SERIAL PRIMARY KEY,
+        free_shipping_threshold NUMERIC(10,2) DEFAULT 999,
+        default_standard_rate NUMERIC(10,2) DEFAULT 49,
+        default_express_rate NUMERIC(10,2) DEFAULT 99,
+        cod_charges NUMERIC(10,2) DEFAULT 40,
+        enable_cod BOOLEAN DEFAULT TRUE,
+        enable_express BOOLEAN DEFAULT TRUE,
+        estimated_days VARCHAR(50) DEFAULT '3-5 business days',
+        shipping_policy TEXT DEFAULT 'Free shipping on orders above ₹999. Standard delivery takes 3-5 business days across India.',
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO shipping_settings (free_shipping_threshold, default_standard_rate, default_express_rate, cod_charges, enable_cod, enable_express, estimated_days, shipping_policy)
+      SELECT 999, 49, 99, 40, TRUE, TRUE, '3-5 business days', 'Free shipping on orders above ₹999. Standard delivery takes 3-5 business days across India.'
+      WHERE NOT EXISTS (SELECT 1 FROM shipping_settings);
     `);
   } catch (error) {
     console.error("❌ Supabase PostgreSQL connection/migration failed:");
