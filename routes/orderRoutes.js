@@ -245,14 +245,105 @@ router.put("/:id/status", verifyAdmin, requirePermission("orders.edit"), async (
   }
 });
 
-// DELETE order (admin only — requires orders.delete)
-router.delete("/:id", verifyAdmin, requirePermission("orders.delete"), async (req, res) => {
+// PUT update order details / payment details (admin only)
+router.put("/:id", verifyAdmin, requirePermission(["orders.edit", "orders.manage"]), async (req, res) => {
+  const { id } = req.params;
+  const { customer_name, total_amount, payment_method, status, payment_status, shipping_phone } = req.body;
+
   try {
+    const existing = await db.query("SELECT * FROM orders WHERE id = $1", [id]);
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const prevOrder = existing.rows[0];
+
+    // If status is updated to or from Cancelled, adjust inventory
+    if (status && status !== prevOrder.status) {
+      if (status === "Cancelled" && prevOrder.status !== "Cancelled") {
+        const { rows: orderItems } = await db.query(
+          "SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1",
+          [id]
+        );
+        for (const it of orderItems) {
+          const q = parseInt(it.quantity, 10) || 1;
+          if (it.product_id) {
+            await db.query(
+              `UPDATE products SET stock = stock + $1, status = CASE WHEN status = 'Out of Stock' THEN 'Active' ELSE status END WHERE id = $2`,
+              [q, it.product_id]
+            );
+          } else if (it.product_name) {
+            await db.query(
+              `UPDATE products SET stock = stock + $1, status = CASE WHEN status = 'Out of Stock' THEN 'Active' ELSE status END WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+              [q, it.product_name]
+            );
+          }
+        }
+      } else if (prevOrder.status === "Cancelled" && status !== "Cancelled") {
+        const { rows: orderItems } = await db.query(
+          "SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1",
+          [id]
+        );
+        for (const it of orderItems) {
+          const q = parseInt(it.quantity, 10) || 1;
+          if (it.product_id) {
+            await db.query(
+              `UPDATE products SET stock = GREATEST(0, stock - $1), status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END WHERE id = $2`,
+              [q, it.product_id]
+            );
+          } else if (it.product_name) {
+            await db.query(
+              `UPDATE products SET stock = GREATEST(0, stock - $1), status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+              [q, it.product_name]
+            );
+          }
+        }
+      }
+    }
+
+    const { rows } = await db.query(
+      `UPDATE orders SET
+        customer_name = COALESCE($1, customer_name),
+        total_amount = COALESCE($2, total_amount),
+        payment_method = COALESCE($3, payment_method),
+        status = COALESCE($4, status),
+        payment_status = COALESCE($5, payment_status),
+        shipping_phone = COALESCE($6, shipping_phone),
+        updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        customer_name !== undefined ? customer_name.trim() : null,
+        total_amount !== undefined ? parseFloat(total_amount) : null,
+        payment_method !== undefined ? payment_method : null,
+        status !== undefined ? status : null,
+        payment_status !== undefined ? payment_status : null,
+        shipping_phone !== undefined ? shipping_phone : null,
+        id,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Order & Payment updated successfully!",
+      order: rows[0],
+    });
+  } catch (err) {
+    console.error("Error updating order:", err);
+    res.status(500).json({ message: "Failed to update order.", error: err.message });
+  }
+});
+
+// DELETE order (admin only — requires orders.delete)
+router.delete("/:id", verifyAdmin, requirePermission(["orders.delete", "orders.manage"]), async (req, res) => {
+  try {
+    // Delete order items first to avoid foreign key constraints
+    await db.query("DELETE FROM order_items WHERE order_id = $1", [req.params.id]);
     const result = await db.query("DELETE FROM orders WHERE id = $1", [req.params.id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Order not found." });
     }
-    res.json({ message: "Order deleted successfully." });
+    res.json({ success: true, message: "Order deleted successfully." });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete order.", error: err.message });
   }
