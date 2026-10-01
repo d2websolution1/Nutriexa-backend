@@ -174,13 +174,71 @@ router.put("/:id/status", verifyAdmin, requirePermission("orders.edit"), async (
   }
 
   try {
+    const existing = await db.query("SELECT status FROM orders WHERE id = $1", [req.params.id]);
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+    const prevStatus = existing.rows[0].status;
+
     const result = await db.query("UPDATE orders SET status = $1 WHERE id = $2", [
       status,
       req.params.id,
     ]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Order not found." });
+
+    // If order was newly cancelled, return stock to inventory
+    if (status === "Cancelled" && prevStatus !== "Cancelled") {
+      const { rows: orderItems } = await db.query(
+        "SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1",
+        [req.params.id]
+      );
+      for (const it of orderItems) {
+        const q = parseInt(it.quantity, 10) || 1;
+        if (it.product_id) {
+          await db.query(
+            `UPDATE products
+             SET stock = stock + $1,
+                 status = CASE WHEN status = 'Out of Stock' THEN 'Active' ELSE status END
+             WHERE id = $2`,
+            [q, it.product_id]
+          );
+        } else if (it.product_name) {
+          await db.query(
+            `UPDATE products
+             SET stock = stock + $1,
+                 status = CASE WHEN status = 'Out of Stock' THEN 'Active' ELSE status END
+             WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+            [q, it.product_name]
+          );
+        }
+      }
+    } else if (prevStatus === "Cancelled" && status !== "Cancelled") {
+      // If order was uncancelled, deduct stock again
+      const { rows: orderItems } = await db.query(
+        "SELECT product_id, product_name, quantity FROM order_items WHERE order_id = $1",
+        [req.params.id]
+      );
+      for (const it of orderItems) {
+        const q = parseInt(it.quantity, 10) || 1;
+        if (it.product_id) {
+          await db.query(
+            `UPDATE products
+             SET stock = GREATEST(0, stock - $1),
+                 status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END
+             WHERE id = $2`,
+            [q, it.product_id]
+          );
+        } else if (it.product_name) {
+          await db.query(
+            `UPDATE products
+             SET stock = GREATEST(0, stock - $1),
+                 status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END
+             WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+            [q, it.product_name]
+          );
+        }
+      }
     }
+
     res.json({ message: "Order status updated successfully." });
   } catch (err) {
     res.status(500).json({ message: "Failed to update order status.", error: err.message });

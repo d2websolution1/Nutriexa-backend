@@ -218,4 +218,209 @@ router.delete("/banners/:id", async (req, res) => {
   }
 });
 
+// ── ANNOUNCEMENT BARS CMS ──────────────────────────────────────────────────
+
+function mapAnnouncement(row) {
+  return {
+    id: row.id,
+    text: row.text,
+    badge: row.badge || "",
+    link: row.link || "",
+    ctaText: row.cta_text || "Shop Now",
+    icon: row.icon || "🎉",
+    image: row.image || "",
+    bgColor: row.bg_color || "linear-gradient(90deg, #15803d, #22c55e)",
+    textColor: row.text_color || "#ffffff",
+    isActive: Boolean(row.is_active),
+    order: Number(row.sort_order || 1),
+    createdAt: row.created_at,
+  };
+}
+
+// GET all announcement bars (optional ?activeOnly=true)
+router.get("/announcements", async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+    let queryStr = "SELECT * FROM announcement_bars";
+    if (activeOnly === "true") {
+      queryStr += " WHERE is_active = TRUE";
+    }
+    queryStr += " ORDER BY is_active DESC, sort_order ASC, id ASC";
+
+    const { rows } = await db.query(queryStr);
+    res.json(rows.map(mapAnnouncement));
+  } catch (err) {
+    console.error("Error fetching announcements:", err);
+    res.status(500).json({ message: "Failed to fetch announcements.", error: err.message });
+  }
+});
+
+// POST create announcement
+router.post("/announcements", async (req, res) => {
+  try {
+    const {
+      text,
+      badge = "",
+      link = "/deals",
+      ctaText = "Shop Now",
+      icon = "🎉",
+      image = "",
+      bgColor = "linear-gradient(90deg, #15803d, #22c55e)",
+      textColor = "#ffffff",
+      isActive = false,
+      order = 1,
+    } = req.body;
+
+    if (!text?.trim()) {
+      return res.status(400).json({ message: "Announcement text is required." });
+    }
+
+    // If marked active, deactivate other announcement bars to ensure only 1 active at a time
+    if (isActive) {
+      await db.query("UPDATE announcement_bars SET is_active = FALSE");
+    }
+
+    const { rows } = await db.query(
+      `INSERT INTO announcement_bars 
+        (text, badge, link, cta_text, icon, image, bg_color, text_color, is_active, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        text.trim(),
+        badge?.trim() || "",
+        link?.trim() || "",
+        ctaText?.trim() || "",
+        icon?.trim() || "🎉",
+        image?.trim() || "",
+        bgColor?.trim() || "linear-gradient(90deg, #15803d, #22c55e)",
+        textColor?.trim() || "#ffffff",
+        Boolean(isActive),
+        parseInt(order, 10) || 1,
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Announcement created successfully!",
+      announcement: mapAnnouncement(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error creating announcement:", err);
+    res.status(500).json({ message: "Failed to create announcement.", error: err.message });
+  }
+});
+
+// PUT update announcement
+router.put("/announcements/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      text,
+      badge,
+      link,
+      ctaText,
+      icon,
+      image,
+      bgColor,
+      textColor,
+      isActive,
+      order,
+    } = req.body;
+
+    if (isActive) {
+      // Deactivate all others
+      await db.query("UPDATE announcement_bars SET is_active = FALSE WHERE id != $1", [id]);
+    }
+
+    const { rows } = await db.query(
+      `UPDATE announcement_bars
+       SET text = COALESCE($1, text),
+           badge = COALESCE($2, badge),
+           link = COALESCE($3, link),
+           cta_text = COALESCE($4, cta_text),
+           icon = COALESCE($5, icon),
+           image = COALESCE($6, image),
+           bg_color = COALESCE($7, bg_color),
+           text_color = COALESCE($8, text_color),
+           is_active = COALESCE($9, is_active),
+           sort_order = COALESCE($10, sort_order),
+           updated_at = NOW()
+       WHERE id = $11
+       RETURNING *`,
+      [
+        text?.trim(),
+        badge !== undefined ? badge.trim() : null,
+        link !== undefined ? link.trim() : null,
+        ctaText !== undefined ? ctaText.trim() : null,
+        icon !== undefined ? icon.trim() : null,
+        image !== undefined ? image.trim() : null,
+        bgColor !== undefined ? bgColor.trim() : null,
+        textColor !== undefined ? textColor.trim() : null,
+        isActive !== undefined ? Boolean(isActive) : null,
+        order !== undefined ? parseInt(order, 10) : null,
+        id,
+      ]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Announcement not found." });
+    }
+
+    res.json({
+      success: true,
+      message: "Announcement updated successfully!",
+      announcement: mapAnnouncement(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error updating announcement:", err);
+    res.status(500).json({ message: "Failed to update announcement.", error: err.message });
+  }
+});
+
+// PATCH toggle announcement active state (ensures only 1 active)
+router.patch("/announcements/:id/toggle", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const current = await db.query("SELECT is_active FROM announcement_bars WHERE id = $1", [id]);
+    if (current.rows.length === 0) {
+      return res.status(404).json({ message: "Announcement not found." });
+    }
+
+    const willBeActive = !current.rows[0].is_active;
+
+    if (willBeActive) {
+      // Deactivate all others
+      await db.query("UPDATE announcement_bars SET is_active = FALSE");
+    }
+
+    const { rows } = await db.query(
+      `UPDATE announcement_bars SET is_active = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [willBeActive, id]
+    );
+
+    res.json({
+      success: true,
+      announcement: mapAnnouncement(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error toggling announcement:", err);
+    res.status(500).json({ message: "Failed to toggle announcement.", error: err.message });
+  }
+});
+
+// DELETE announcement
+router.delete("/announcements/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await db.query("DELETE FROM announcement_bars WHERE id = $1", [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: "Announcement not found." });
+    }
+    res.json({ success: true, message: "Announcement deleted successfully." });
+  } catch (err) {
+    console.error("Error deleting announcement:", err);
+    res.status(500).json({ message: "Failed to delete announcement.", error: err.message });
+  }
+});
+
 export default router;

@@ -70,6 +70,28 @@ export async function createOrderInDB({
          VALUES ($1, $2, $3, $4, $5)`,
         [orderId, item.product_id || null, item.product_name, item.quantity, item.price]
       );
+
+      // Real-time Inventory stock deduction:
+      // Decrease product stock by the purchased quantity.
+      // If stock reaches 0, automatically mark status as 'Out of Stock'.
+      const qty = parseInt(item.quantity, 10) || 1;
+      if (item.product_id) {
+        await client.query(
+          `UPDATE products
+           SET stock = GREATEST(0, stock - $1),
+               status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END
+           WHERE id = $2`,
+          [qty, item.product_id]
+        );
+      } else if (item.product_name) {
+        await client.query(
+          `UPDATE products
+           SET stock = GREATEST(0, stock - $1),
+               status = CASE WHEN stock - $1 <= 0 THEN 'Out of Stock' ELSE status END
+           WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+          [qty, item.product_name]
+        );
+      }
     }
 
     await client.query("COMMIT");

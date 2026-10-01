@@ -338,6 +338,34 @@ app.listen(PORT, async () => {
       SELECT 'Free Shipping on Orders ₹999+', 'Limited time offer. Don''t miss out!', 'Buy Now', '/products', '', 'from-orange-500 to-rose-600', FALSE, 3
       WHERE (SELECT COUNT(*) FROM hero_banners) = 2;
 
+      -- Ensure bg_gradient in hero_banners can hold custom CSS gradients
+      ALTER TABLE hero_banners ALTER COLUMN bg_gradient TYPE TEXT;
+
+      -- Announcement Bars table for CMS and Storefront
+      CREATE TABLE IF NOT EXISTS announcement_bars (
+        id SERIAL PRIMARY KEY,
+        text TEXT NOT NULL,
+        badge VARCHAR(100) DEFAULT '',
+        link VARCHAR(255) DEFAULT '/deals',
+        cta_text VARCHAR(100) DEFAULT 'Shop Now',
+        icon VARCHAR(255) DEFAULT '🎉',
+        image TEXT DEFAULT '',
+        bg_color TEXT DEFAULT 'linear-gradient(90deg, #16a34a, #22c55e)',
+        text_color VARCHAR(100) DEFAULT '#ffffff',
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO announcement_bars (text, badge, link, cta_text, icon, bg_color, text_color, is_active, sort_order)
+      SELECT 'Free Shipping on orders above ₹999 | Use code NUTRIEXA10 for 10% off!', 'LIMITED OFFER', '/deals', 'Use Code: NUTRIEXA10', '🎉', 'linear-gradient(90deg, #15803d, #22c55e)', '#ffffff', TRUE, 1
+      WHERE NOT EXISTS (SELECT 1 FROM announcement_bars);
+
+      INSERT INTO announcement_bars (text, badge, link, cta_text, icon, bg_color, text_color, is_active, sort_order)
+      SELECT 'Flash Sale: 40% off on all Pre-Workouts today only!', 'FLASH SALE', '/products?category=pre-workouts', 'Shop Deals', '⚡', 'linear-gradient(90deg, #b91c1c, #ea580c)', '#ffffff', FALSE, 2
+      WHERE (SELECT COUNT(*) FROM announcement_bars) = 1;
+
       CREATE TABLE IF NOT EXISTS shipping_zones (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
