@@ -423,4 +423,200 @@ router.delete("/announcements/:id", async (req, res) => {
   }
 });
 
+function mapFeaturedSection(row) {
+  let productIds = [];
+  try {
+    if (Array.isArray(row.product_ids)) {
+      productIds = row.product_ids;
+    } else if (typeof row.product_ids === "string") {
+      productIds = JSON.parse(row.product_ids || "[]");
+    }
+  } catch {
+    productIds = [];
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle || "",
+    badge: row.badge || "",
+    productIds: productIds,
+    category: row.category || "All",
+    layoutType: row.layout_type || "grid",
+    maxItems: Number(row.max_items || 8),
+    isActive: Boolean(row.is_active),
+    order: Number(row.sort_order || 1),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// GET all featured sections (supports ?activeOnly=true)
+router.get("/featured-sections", async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+    let query = "SELECT * FROM featured_sections";
+    const params = [];
+
+    if (activeOnly === "true") {
+      query += " WHERE is_active = TRUE";
+    }
+
+    query += " ORDER BY sort_order ASC, id ASC";
+    const { rows } = await db.query(query, params);
+    res.json(rows.map(mapFeaturedSection));
+  } catch (err) {
+    console.error("Error fetching featured sections:", err);
+    res.status(500).json({ message: "Failed to fetch featured sections.", error: err.message });
+  }
+});
+
+// POST create featured section
+router.post("/featured-sections", async (req, res) => {
+  try {
+    const {
+      title,
+      subtitle = "",
+      badge = "TOP PICKS",
+      productIds = [],
+      category = "All",
+      layoutType = "grid",
+      maxItems = 8,
+      isActive = true,
+      order = 1,
+    } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "Section title is required." });
+    }
+
+    const { rows } = await db.query(
+      `INSERT INTO featured_sections 
+        (title, subtitle, badge, product_ids, category, layout_type, max_items, is_active, sort_order)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        title.trim(),
+        subtitle,
+        badge,
+        JSON.stringify(Array.isArray(productIds) ? productIds : []),
+        category,
+        layoutType,
+        parseInt(maxItems, 10) || 8,
+        Boolean(isActive),
+        parseInt(order, 10) || 1,
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Featured section created successfully!",
+      section: mapFeaturedSection(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error creating featured section:", err);
+    res.status(500).json({ message: "Failed to create featured section.", error: err.message });
+  }
+});
+
+// PUT update featured section
+router.put("/featured-sections/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      subtitle,
+      badge,
+      productIds,
+      category,
+      layoutType,
+      maxItems,
+      isActive,
+      order,
+    } = req.body;
+
+    const { rows } = await db.query(
+      `UPDATE featured_sections SET
+        title = COALESCE($1, title),
+        subtitle = COALESCE($2, subtitle),
+        badge = COALESCE($3, badge),
+        product_ids = COALESCE($4::jsonb, product_ids),
+        category = COALESCE($5, category),
+        layout_type = COALESCE($6, layout_type),
+        max_items = COALESCE($7, max_items),
+        is_active = COALESCE($8, is_active),
+        sort_order = COALESCE($9, sort_order),
+        updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [
+        title !== undefined ? title.trim() : null,
+        subtitle !== undefined ? subtitle : null,
+        badge !== undefined ? badge : null,
+        productIds !== undefined ? JSON.stringify(productIds) : null,
+        category !== undefined ? category : null,
+        layoutType !== undefined ? layoutType : null,
+        maxItems !== undefined ? parseInt(maxItems, 10) : null,
+        isActive !== undefined ? Boolean(isActive) : null,
+        order !== undefined ? parseInt(order, 10) : null,
+        id,
+      ]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Featured section not found." });
+    }
+
+    res.json({
+      success: true,
+      message: "Featured section updated successfully!",
+      section: mapFeaturedSection(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error updating featured section:", err);
+    res.status(500).json({ message: "Failed to update featured section.", error: err.message });
+  }
+});
+
+// PATCH toggle active state
+router.patch("/featured-sections/:id/toggle", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      `UPDATE featured_sections 
+       SET is_active = NOT is_active, updated_at = NOW() 
+       WHERE id = $1 
+       RETURNING *`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Featured section not found." });
+    }
+
+    res.json({
+      success: true,
+      section: mapFeaturedSection(rows[0]),
+    });
+  } catch (err) {
+    console.error("Error toggling featured section:", err);
+    res.status(500).json({ message: "Failed to toggle featured section.", error: err.message });
+  }
+});
+
+// DELETE featured section
+router.delete("/featured-sections/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await db.query("DELETE FROM featured_sections WHERE id = $1", [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: "Featured section not found." });
+    }
+    res.json({ success: true, message: "Featured section deleted successfully." });
+  } catch (err) {
+    console.error("Error deleting featured section:", err);
+    res.status(500).json({ message: "Failed to delete featured section.", error: err.message });
+  }
+});
+
 export default router;

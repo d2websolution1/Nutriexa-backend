@@ -423,6 +423,41 @@ app.listen(PORT, async () => {
       SELECT 'DTDC', '🟡', 'Disconnected', FALSE, 'https://www.dtdc.in/tracking'
       WHERE (SELECT COUNT(*) FROM delivery_partners) = 3;
 
+      CREATE TABLE IF NOT EXISTS announcement_bars (
+        id SERIAL PRIMARY KEY,
+        text TEXT NOT NULL DEFAULT '',
+        badge VARCHAR(100) DEFAULT '',
+        link VARCHAR(500) DEFAULT '/deals',
+        cta_text VARCHAR(100) DEFAULT 'Shop Now',
+        icon VARCHAR(50) DEFAULT '🎉',
+        image TEXT DEFAULT '',
+        bg_color TEXT DEFAULT 'linear-gradient(90deg, #15803d, #22c55e)',
+        text_color VARCHAR(50) DEFAULT '#ffffff',
+        is_active BOOLEAN DEFAULT FALSE,
+        sort_order INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS featured_sections (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL DEFAULT 'Featured Supplements',
+        subtitle TEXT DEFAULT 'Handpicked performance supplements crafted for real results',
+        badge VARCHAR(100) DEFAULT 'TOP PICKS',
+        product_ids JSONB DEFAULT '[]'::jsonb,
+        category VARCHAR(100) DEFAULT 'All',
+        layout_type VARCHAR(50) DEFAULT 'grid',
+        max_items INTEGER DEFAULT 8,
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      INSERT INTO featured_sections (title, subtitle, badge, product_ids, category, layout_type, max_items, is_active, sort_order)
+      SELECT 'Featured Supplements', 'Handpicked performance supplements crafted for real results', 'TOP PICKS', '[]'::jsonb, 'All', 'grid', 8, TRUE, 1
+      WHERE NOT EXISTS (SELECT 1 FROM featured_sections);
+
       CREATE TABLE IF NOT EXISTS shipping_settings (
         id SERIAL PRIMARY KEY,
         free_shipping_threshold NUMERIC(10,2) DEFAULT 999,
