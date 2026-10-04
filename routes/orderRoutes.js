@@ -78,8 +78,12 @@ router.get("/track/:orderNumber", async (req, res) => {
       return res.status(404).json({ message: "Order not found." });
     }
 
+    // Join with products to get image for each item
     const { rows: itemRows } = await db.query(
-      "SELECT * FROM order_items WHERE order_id = $1",
+      `SELECT oi.*, p.image AS product_image, p.images AS product_images
+       FROM order_items oi
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = $1`,
       [orderRows[0].id]
     );
 
