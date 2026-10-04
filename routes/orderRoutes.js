@@ -166,8 +166,8 @@ router.post("/", async (req, res) => {
 
 // UPDATE order status (admin only — requires orders.edit)
 router.put("/:id/status", verifyAdmin, requirePermission("orders.edit"), async (req, res) => {
-  const { status } = req.body;
-  const validStatuses = ["Pending", "Shipped", "Delivered", "Cancelled"];
+  const { status, estimated_delivery } = req.body;
+  const validStatuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status value." });
@@ -180,10 +180,10 @@ router.put("/:id/status", verifyAdmin, requirePermission("orders.edit"), async (
     }
     const prevStatus = existing.rows[0].status;
 
-    const result = await db.query("UPDATE orders SET status = $1 WHERE id = $2", [
-      status,
-      req.params.id,
-    ]);
+    const result = await db.query(
+      "UPDATE orders SET status = $1, estimated_delivery = COALESCE($2, estimated_delivery) WHERE id = $3",
+      [status, estimated_delivery || null, req.params.id]
+    );
 
     // If order was newly cancelled, return stock to inventory
     if (status === "Cancelled" && prevStatus !== "Cancelled") {

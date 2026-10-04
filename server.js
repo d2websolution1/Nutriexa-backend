@@ -245,7 +245,8 @@ app.listen(PORT, async () => {
       ADD COLUMN IF NOT EXISTS shipping_address TEXT,
       ADD COLUMN IF NOT EXISTS shipping_city VARCHAR(100),
       ADD COLUMN IF NOT EXISTS shipping_state VARCHAR(100),
-      ADD COLUMN IF NOT EXISTS shipping_pincode VARCHAR(20);
+      ADD COLUMN IF NOT EXISTS shipping_pincode VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS estimated_delivery DATE;
 
       ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(50) USING status::text;
 
