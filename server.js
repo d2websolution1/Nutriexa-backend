@@ -19,6 +19,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import cmsRoutes from "./routes/cmsRoutes.js";
 import shippingRoutes from "./routes/shippingRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 import db from "./config/db.js";
 
@@ -48,6 +49,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/cms", cmsRoutes);
 app.use("/api/shipping", shippingRoutes);
+app.use("/api/admin/analytics", analyticsRoutes);
 
 app.post("/api/newsletter/subscribe", async (req, res) => {
   const { email } = req.body;
